@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Application xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			   xmlns:s="library://ns.adobe.com/flex/spark" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx" width="1200" height="700" backgroundColor="#333333" applicationComplete="application1_applicationCompleteHandler(event)">
+	<fx:Script>
+		<![CDATA[
+			import com.adobe.serialization.json.JSON;
+			
+			import mx.events.FlexEvent;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			
+			private static const SERVICE_URL:String = "http://localhost:4567";
+			private static const minDate1:Date = new Date(null, null, null, null, 1, null, null);
+			
+			private var sessionLoader:URLLoader;
+			
+			protected function application1_applicationCompleteHandler(event:FlexEvent):void {
+				var sinatraTestService:HTTPService = new HTTPService();
+				sinatraTestService.url = SERVICE_URL + "/servicetest";
+				sinatraTestService.method = "GET";
+				sinatraTestService.addEventListener(ResultEvent.RESULT, handleTestResult);
+				sinatraTestService.addEventListener(FaultEvent.FAULT, handleTestFault);
+				sinatraTestService.send();
+			}
+			
+			private function handleTestFault(evt:FaultEvent):void {
+				trace("service down. We must archive these data to send them later");
+			}
+			
+			
+			private function handleTestResult(evt:ResultEvent):void {
+				sinatraService.url = SERVICE_URL + "/sessions/"+new Date().time;
+				sinatraService.method = "GET";
+				sinatraService.send();				
+			}
+			
+			private function countSessionLength(t:Number):void {
+				if(t<=getSecs(minDate1)) {
+					sessionsLengthArray[0].Count = sessionsLengthArray[0].Count + 1; 
+				}
+				else if(t > getSecs(minDate1) && t <= getSecs(minDate1)*2) {
+					sessionsLengthArray[1].Count = sessionsLengthArray[1].Count + 1; 
+				}
+				else if(t > getSecs(minDate1)*2 && t <= getSecs(minDate1)*5) {
+					sessionsLengthArray[2].Count = sessionsLengthArray[2].Count + 1; 
+				}
+				else if(t > getSecs(minDate1)*5 && t <= getSecs(minDate1)*15) {
+					sessionsLengthArray[3].Count = sessionsLengthArray[3].Count + 1; 
+				}
+				else {
+					sessionsLengthArray[4].Count = sessionsLengthArray[4].Count + 1; 
+				}
+			}
+			
+			private function getSecs(d:Date):Number {
+				var se:Number = d.seconds;
+				var mi:Number = d.minutes*60;
+				//var hr:Number = d.hours*60*60;
+				return se+mi;
+			}
+			
+			private function countRoom(room:String):void {
+				
+				switch(room) {
+					case 'room1IOS':
+						roomChartArray[0].Count = roomChartArray[0].Count + 1; 
+						sessionDeviceArray[0].Count = sessionDeviceArray[0].Count + 1; 
+						break;
+					case 'room2IOS':
+						roomChartArray[1].Count = roomChartArray[1].Count + 1;
+						sessionDeviceArray[0].Count = sessionDeviceArray[0].Count + 1; 
+						break;
+					case 'room1Andro':
+						roomChartArray[0].Count = roomChartArray[0].Count + 1;
+						sessionDeviceArray[1].Count = sessionDeviceArray[1].Count + 1; 
+						break;
+					case 'room2Andro':
+						roomChartArray[1].Count = roomChartArray[1].Count + 1;
+						sessionDeviceArray[1].Count = sessionDeviceArray[1].Count + 1; 
+						break;
+				}
+			}
+			
+			protected function sessionGrid_clickHandler(event:MouseEvent):void {
+				currentState = "session";
+				room.source = null;
+				room.source = SERVICE_URL + "/picture/" + (event.currentTarget as DataGrid).selectedItem.id+".jpg";
+			}
+			
+			[Bindable]
+			private function displayRoom(data:Object, field:String, index:Number, percentValue:Number):String {
+				return data.Room;
+			}
+			
+			[Bindable]
+			private function displayDevice(data:Object, field:String, index:Number, percentValue:Number):String {
+				return data.Device;
+			}
+			
+			protected function sinatraService_resultHandler(event:ResultEvent):void {
+				var myData:Object = com.adobe.serialization.json.JSON.decode(event.result as String);
+				var d:Date;
+				var duration:Date;
+				
+				roomChartArray = new ArrayCollection([
+					{ Room: "room1", Count: 0 },
+					{ Room: "room2", Count: 0 }]);
+				sessionDeviceArray = new ArrayCollection([
+					{ Device: "iOS", Count: 0 },
+					{ Device: "Android", Count: 0 }]);
+				sessionsLengthArray = new ArrayCollection([
+					{ Time: "Under 1min", Count: 0 },
+					{ Time: "1-2min", Count: 0 },
+					{ Time: "2-5min", Count: 0 },
+					{ Time: "5-15min", Count: 0 },
+					{ Time: "Over 15min", Count: 0 }]);
+				
+				for each (var o:Object in myData) {
+					d = new Date();
+					duration = new Date();
+					d.time = new Number(o.sessionid);
+					duration.time = new Number(o.ellapsed);
+					sessionsArray.addItem({id: o.sessionid, Date: d.toString()});
+					countRoom((o.room as String).substr(14));
+					countSessionLength(getSecs(duration));
+				}
+			}
+			
+			protected function sinatraService_faultHandler(event:FaultEvent):void
+			{
+				trace(event);
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<s:ArrayCollection id="sessionsArray" />
+		<s:ArrayCollection id="roomChartArray" />
+		<s:ArrayCollection id="sessionsLengthArray" />
+		<s:ArrayCollection id="sessionDeviceArray" />
+		
+		<s:HTTPService id="sinatraService" result="sinatraService_resultHandler(event)" fault="sinatraService_faultHandler(event)"  />
+	</fx:Declarations>
+	
+	<s:states>
+		<s:State name="menu" />
+		<s:State name="session" />
+	</s:states>
+	
+	<s:Button label="HOME" chromeColor="#333333" color="#FFFFFF" click="currentState='menu'" left="10" top="10" />
+	<s:HGroup top="50" left="10" right="10" bottom="10">
+		<s:VGroup height="100%">
+			<s:VGroup height="100%" id="sessionsGroup" includeIn="menu">
+				<s:Label color="#FFFFFF" text="Sessions" textDecoration="underline" />
+				<s:DataGrid id="sessionGrid" height="100%" dataProvider="{sessionsArray}" click="sessionGrid_clickHandler(event)" chromeColor="#666666" color="#333333"/>
+			</s:VGroup>
+			
+			<s:VGroup buttonMode="true" horizontalAlign="left" includeIn="session">
+				<s:Label color="#FFFFFF" text="Room" textDecoration="underline" />
+				<s:Image id="room" width="{sessionsGroup.width}" height="250" />
+			</s:VGroup>
+		</s:VGroup>
+		<s:Spacer width="40" />
+		<s:VGroup width="100%" height="100%" includeIn="menu">
+			<s:HGroup width="100%" height="100%">
+				<s:VGroup width="100%" height="100%">
+					<s:Label color="#FFFFFF" text="Session length" textDecoration="underline" />
+					
+					<mx:BarChart id="bar" height="100%" width="90%" color="0xFFFFFF" 
+								 showDataTips="true" dataProvider="{sessionsLengthArray}">
+						
+						<mx:verticalAxis>
+							<mx:CategoryAxis categoryField="Time"/>
+						</mx:verticalAxis>
+						
+						<mx:series>
+							<mx:BarSeries yField="Time" xField="Count" displayName="Sum"/>
+						</mx:series>
+					</mx:BarChart>
+				</s:VGroup>
+			</s:HGroup>
+			<s:Spacer height="30" />
+			<s:HGroup width="100%" height="100%">
+				<s:VGroup width="100%" height="100%">
+					<s:Label color="#FFFFFF" text="Room observed" textDecoration="underline" />
+					<mx:PieChart id="roomsChart" height="100%" width="100%" paddingRight="5" paddingLeft="5" color="0xFFFFFF" showDataTips="true" dataProvider="{roomChartArray}" >
+						<mx:series>
+							<mx:PieSeries labelPosition="callout" field="Count" labelFunction="displayRoom">
+								<mx:calloutStroke>
+									<mx:Stroke weight="0" color="0x888888" alpha="1.0"/>
+								</mx:calloutStroke>
+								<mx:radialStroke>
+									<mx:Stroke weight="0" color="#FFFFFF" alpha="0.20"/>
+								</mx:radialStroke>
+								<mx:stroke>
+									<mx:Stroke color="0" alpha="0.20" weight="2"/>
+								</mx:stroke>
+							</mx:PieSeries>
+						</mx:series>
+					</mx:PieChart>
+				</s:VGroup>
+				<s:VGroup width="100%" height="100%">
+					<s:Label color="#FFFFFF" text="Observing device" textDecoration="underline" />
+					<mx:PieChart id="devicesChart" height="100%" width="100%" paddingRight="5" paddingLeft="5" color="0xFFFFFF" showDataTips="true" dataProvider="{sessionDeviceArray}" >
+						<mx:series>
+							<mx:PieSeries labelPosition="callout" field="Count" labelFunction="displayDevice">
+								<mx:calloutStroke>
+									<mx:Stroke weight="0" color="0x888888" alpha="1.0"/>
+								</mx:calloutStroke>
+								<mx:radialStroke>
+									<mx:Stroke weight="0" color="#FFFFFF" alpha="0.20"/>
+								</mx:radialStroke>
+								<mx:stroke>
+									<mx:Stroke color="0" alpha="0.20" weight="2"/>
+								</mx:stroke>
+							</mx:PieSeries>
+						</mx:series>
+					</mx:PieChart>
+				</s:VGroup>
+			</s:HGroup>
+		</s:VGroup>
+	</s:HGroup>
+</s:Application>
